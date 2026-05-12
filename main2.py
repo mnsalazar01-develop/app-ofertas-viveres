@@ -2,76 +2,66 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 
-# 1. Configuración de la App
-st.set_page_config(page_title="Control de Víveres Pro", layout="wide", page_icon="🛒")
+st.set_page_config(page_title="Control Víveres Pro", layout="wide")
 
-# 2. Conexión Segura
+# 1. Conexión
 url = st.secrets["connections"]["gsheets"]["spreadsheet"]
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 st.title("🛒 Dashboard de Control de Víveres")
 
-# 3. Función de Carga (Pestañas en Mayúscula)
-@st.cache_data(ttl=60)
-def cargar_base_datos():
-    # Nombres de pestañas con mayúscula inicial
-    tabs = ["Categorias", "Productos", "Supermercados", "Sucursales", "Precios_sucursal", "Ofertas"]
-    data = {}
-    for t in tabs:
-        try:
-            df = conn.read(spreadsheet=url, worksheet=t, ttl=0)
-            # TRUCO: Forzamos que los CAMPOS internos siempre sean minúsculas
-            df.columns = [str(c).lower().strip() for c in df.columns]
-            data[t] = df
-        except:
-            continue
-    return data
-
-db = cargar_base_datos()
-
-# 4. Interfaz Principal
-if "productos" in db and not db["productos"].empty:
-    menu = ["📊 Ofertas del Día", "📦 Catálogo Completo", "🏪 Directorio de Tiendas"]
-    choice = st.sidebar.selectbox("Navegación Principal", menu)
-
-    if choice == "📊 Ofertas del Día":
-        st.subheader("🚀 Análisis de Descuentos Activos")
+# 2. Función de Carga Ultra-Flexible
+@st.cache_data(ttl=10)
+def cargar_db_flexible():
+    # Buscamos primero qué pestañas EXISTEN realmente en tu Excel
+    try:
+        # Leemos el archivo completo para extraer nombres de hojas
+        query = f'SELECT * FROM "Productos"' # Intento inicial
+        # Para ser más seguros, leemos la lista de todas las pestañas
+        # mediante un pequeño truco: leer sin worksheet trae la primera
+        df_test = conn.read(spreadsheet=url, ttl=0)
         
-        # Verificamos si tenemos lo necesario para el cruce
-        if all(x in db for x in ["ofertas", "productos", "sucursales", "supermercados"]):
+        # Lista de lo que queremos buscar
+        buscar = ["Categorias", "Productos", "Supermercados", "Sucursales", "Precios_sucursal", "Ofertas"]
+        data = {}
+        
+        for t in buscar:
             try:
-                # Cruce maestro usando id_producto e id_sucursal (en minúsculas)
-                resumen = pd.merge(db["ofertas"], db["productos"], on="id_producto")
-                resumen = pd.merge(resumen, db["sucursales"], on="id_sucursal")
-                resumen = pd.merge(resumen, db["supermercados"], on="id_super")
-                
-                # Visualización Estética
-                for _, fila in resumen.iterrows():
-                    with st.container():
-                        col1, col2, col3 = st.columns([2, 2, 1])
-                        with col1:
-                            st.markdown(f"### {fila['nombre']} ({fila['marca']})")
-                            st.write(f"📏 Tamaño: {fila['tamano']} {fila['unidad']}")
-                        with col2:
-                            st.write(f"🏪 **{fila['nombre_supermercado']}**")
-                            st.caption(f"Sucursal: {fila['nombre_sucursal']}")
-                        with col3:
-                            st.metric("OFERTA", f"${fila['precio_oferta']}")
-                        st.divider()
-            except Exception as e:
-                st.warning("⚠️ Hay una inconsistencia en los IDs de las tablas. Revisa que coincidan.")
-        else:
-            st.info("💡 Completa las 6 pestañas en tu Excel para activar el Dashboard inteligente.")
+                # Intentamos leer la pestaña tal cual
+                df = conn.read(spreadsheet=url, worksheet=t, ttl=0)
+                # Convertimos encabezados a minúsculas inmediatamente
+                df.columns = [str(c).lower().strip() for c in df.columns]
+                data[t.lower()] = df
+                st.sidebar.success(f"✅ {t}")
+            except:
+                st.sidebar.error(f"❌ {t}")
+                continue
+        return data
+    except:
+        return None
 
-    elif choice == "📦 Catálogo Completo":
-        st.subheader("📦 Lista Maestra de Productos")
+db = cargar_db_flexible()
+
+# 3. Verificación y Lógica
+if db and "productos" in db:
+    st.sidebar.divider()
+    menu = ["📊 Ofertas", "📦 Catálogo"]
+    choice = st.sidebar.radio("Navegación", menu)
+    
+    if choice == "📦 Catálogo":
+        st.subheader("Catálogo Maestro")
         st.dataframe(db["productos"], use_container_width=True)
-
-    elif choice == "🏪 Directorio de Tiendas":
-        st.subheader("📍 Sucursales Registradas")
-        if "sucursales" in db:
-            df_s = pd.merge(db["sucursales"], db["supermercados"], on="id_super")
-            st.table(df_s[['nombre_supermercado', 'nombre_sucursal', 'ciudad']])
-
+        
+    if choice == "📊 Ofertas":
+        if "ofertas" in db:
+            st.subheader("Ofertas Activas")
+            st.dataframe(db["ofertas"], use_container_width=True)
+        else:
+            st.info("Crea la pestaña 'Ofertas' para ver los descuentos.")
 else:
-    st.error("🚨 La pestaña 'Productos' no se reconoce. Revisa que el nombre empiece con Mayúscula.")
+    st.error("🚨 Sistema en espera: No se detecta la pestaña 'Productos'.")
+    st.info("Acción requerida: Asegúrate de que en Google Sheets la pestaña se llame exactamente Productos y que tenga datos.")
+    # Botón para forzar recarga
+    if st.button("🔄 Reintentar Conexión"):
+        st.cache_data.clear()
+        st.rerun()
