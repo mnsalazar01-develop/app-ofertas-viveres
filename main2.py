@@ -80,3 +80,15 @@ except Exception as e:
     st.error(f"Error de conexión: {e}")
     st.warning("Asegúrate de que los nombres de las pestañas en Google Sheets coincidan exactamente y la URL sea pública.")
 
+# SECCIÓN DE DEPURACIÓN (Solo para revisar si las tablas cargan)
+with st.expander("🛠️ Modo Depuración: Revisar tablas en Google Sheets"):
+    st.write("Selecciona una tabla para ver si tiene datos:")
+    tabla_debug = st.selectbox("Elegir tabla:", list(db.keys()))
+    
+    if tabla_debug:
+        df_temp = db[tabla_debug]
+        if df_temp.empty:
+            st.warning(f"La tabla '{tabla_debug}' está VACÍA o no se pudo leer.")
+        else:
+            st.success(f"Tabla '{tabla_debug}' leída con éxito. Tiene {len(df_temp)} filas.")
+            st.dataframe(df_temp) # Muestra el contenido crudo de la tabla
