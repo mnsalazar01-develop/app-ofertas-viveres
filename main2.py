@@ -2,62 +2,61 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 
-st.set_page_config(page_title="Escáner de Pestañas Pro", layout="wide")
-st.title("🔍 Comparador Visual de Pestañas")
+st.set_page_config(page_title="Escáner Pro", layout="wide")
+st.title("🔍 Escáner de Pestañas y Campos")
 
 # 1. Conexión
 url = st.secrets["connections"]["gsheets"]["spreadsheet"]
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 2. El Programa Comparador
+# 2. Lista de lo que queremos encontrar
+esperados = ["Categorias", "Productos", "Supermercados", "Sucursales", "Precios_sucursal", "Ofertas"]
+
+st.write("### 📜 Resultado del Análisis Lado a Lado")
+
+# 3. Intentamos leer las pestañas una por una
+resultados = []
+
+for nombre in esperados:
+    try:
+        # Intentamos leer la pestaña
+        df = conn.read(spreadsheet=url, worksheet=nombre, ttl=0)
+        
+        # Si llega aquí, es que la encontró
+        columnas = ", ".join(df.columns.tolist()[:3]) # Vemos las primeras 3 columnas
+        resultados.append({
+            "Pestaña Buscada": nombre,
+            "Estado": "✅ ENCONTRADA",
+            "Columnas que ve la App": columnas
+        })
+    except Exception as e:
+        # Si falla, tratamos de adivinar por qué
+        error_msg = str(e)
+        estado = "❌ NO ENCONTRADA"
+        if "400" in error_msg:
+            sugerencia = "Nombre mal escrito o pestaña vacía"
+        else:
+            sugerencia = "Error de conexión"
+            
+        resultados.append({
+            "Pestaña Buscada": nombre,
+            "Estado": estado,
+            "Columnas que ve la App": sugerencia
+        })
+
+# Mostrar tabla visual
+st.table(pd.DataFrame(resultados))
+
+# 4. TRUCO FINAL: ¿Qué hay en la PRIMERA pestaña que aparezca?
+st.divider()
+st.subheader("👀 Contenido de la primera pestaña que detecta Google:")
 try:
-    # Obtenemos los nombres REALES de las pestañas directamente de la API de Google
-    # Usamos el motor de gspread que viene dentro de la conexión
-    sheet_metadata = conn._instance.spreadsheet(url).worksheets()
-    nombres_reales = [sheet.title for sheet in sheet_metadata]
-    
-    st.write("### 📜 Resultado del Escaneo")
-    
-    # Lista de lo que nosotros queremos (Lo que busca el código)
-    nombres_esperados = ["Categorias", "Productos", "Supermercados", "Sucursales", "Precios_sucursal", "Ofertas"]
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.write("**Lo que el programa busca:**")
-        for esp in nombres_esperados:
-            if esp in nombres_reales:
-                st.success(f"✅ {esp}")
-            else:
-                st.error(f"❌ {esp}")
+    df_first = conn.read(spreadsheet=url, ttl=0)
+    st.write(f"La App está leyendo una pestaña con estas columnas: `{list(df_first.columns)}`")
+    st.dataframe(df_first.head(3))
+except:
+    st.error("Ni siquiera se pudo leer la primera pestaña.")
 
-    with col2:
-        st.write("**Lo que Google Sheets tiene realmente:**")
-        for real in nombres_reales:
-            if real in nombres_esperados:
-                st.info(f"💎 {real} (¡Coincidencia perfecta!)")
-            else:
-                st.warning(f"⚠️ '{real}' (No coincide con lo que busca el código)")
-                st.write(f"  ↳ *Tip: Revisa si tiene espacios invisibles: '{real}'*")
-
-    st.divider()
-
-    # 3. Comparación Visual Detallada
-    st.subheader("📊 Comparación Visual Lado a Lado")
-    
-    # Creamos una tabla para verlo más claro
-    comparativa = []
-    for i in range(max(len(nombres_esperados), len(nombres_reales))):
-        esp = nombres_esperados[i] if i < len(nombres_esperados) else "---"
-        real = nombres_reales[i] if i < len(nombres_reales) else "---"
-        comparativa.append({"Buscado por Código": esp, "Escrito en Excel": real, "Estado": "✅ OK" if esp == real else "❌ ERROR"})
-    
-    st.table(pd.DataFrame(comparativa))
-
-except Exception as e:
-    st.error("No se pudo leer la lista de pestañas.")
-    st.info(f"Detalle: {e}")
-
-if st.button("🔄 Volver a Escanear"):
+if st.button("🔄 Reintentar Escaneo"):
     st.cache_data.clear()
     st.rerun()
