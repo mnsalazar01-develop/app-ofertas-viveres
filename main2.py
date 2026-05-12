@@ -32,19 +32,19 @@ choice = st.sidebar.selectbox("Navegación", menu)
 # --- CARGA DE DATOS ---
 @st.cache_data(ttl=600)
 def cargar_todas_las_tablas():
-    # Asegúrate de que estos nombres sean EXACTOS a tus pestañas de Excel
     tabs = ["Categorias", "Productos", "Supermercados", "Sucursales", "Precios_Sucursal", "Ofertas"]
     data = {}
     try:
+        # Todo este bloque debe tener 8 espacios (o 2 tabs) de sangría
         for t in tabs:
-            # Intentamos leer cada pestaña
             data[t] = conn.read(spreadsheet=url_gsheet, worksheet=t)
         return data
     except Exception as e:
+        # El except debe estar exactamente bajo el try
         st.error(f"Error al leer las pestañas: {e}")
         return None
 
-# Intentamos inicializar la variable db
+# Llamada a la función
 db = cargar_todas_las_tablas()
 
 # --- VERIFICACIÓN DE SEGURIDAD ---
