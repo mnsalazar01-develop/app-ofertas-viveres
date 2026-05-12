@@ -2,51 +2,68 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 
-st.set_page_config(page_title="Control de Ofertas Pro", layout="wide")
-st.title("🛒 Control de Víveres y Ofertas")
+# 1. Configuración de la App
+st.set_page_config(page_title="Control de Ofertas Pro", layout="wide", page_icon="🛒")
 
-# 1. Conexión
+# 2. Conexión a Google Sheets
 url = st.secrets["connections"]["gsheets"]["spreadsheet"]
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 2. CARGA INTELIGENTE
-# Vamos a intentar leer las tablas. Si falla por nombre, usaremos la primera por defecto.
+st.title("🛒 Dashboard de Control de Víveres")
+
+# 3. Función de Carga de las 6 Tablas (Todo en minúsculas)
 @st.cache_data(ttl=60)
-def cargar_datos_seguros():
-    try:
-        # Cargamos Productos (que ya sabemos que es la primera y sí funciona)
-        df_productos = conn.read(spreadsheet=url, ttl=0)
-        
-        # Intentamos cargar Ofertas (asumiendo que es la pestaña llamada 'Ofertas')
-        # Si da error, al menos tendremos los productos
+def cargar_base_datos():
+    tabs = ["Categorias", "Productos", "Supermercados", "Sucursales", "Precios_Sucursal", "Ofertas"]
+    data = {}
+    for t in tabs:
         try:
-            df_ofertas = conn.read(spreadsheet=url, worksheet="Ofertas", ttl=0)
+            df = conn.read(spreadsheet=url, worksheet=t, ttl=0)
+            # Limpieza: Aseguramos que los nombres de columnas estén en minúsculas y sin espacios
+            df.columns = [c.lower().strip() for c in df.columns]
+            data[t] = df
         except:
-            df_ofertas = pd.DataFrame() # Vacío si falla
-            
-        return df_productos, df_ofertas
-    except:
-        return None, None
+            continue
+    return data
 
-df_p, df_o = cargar_datos_seguros()
+db = cargar_base_datos()
 
-# 3. INTERFAZ
-if df_p is not None:
-    st.sidebar.success("✅ Conectado al Catálogo")
-    
-    # Buscador usando tus nombres de columna exactos (Id_producto, nombre, marca)
-    st.subheader("📦 Buscador de Productos")
-    busqueda = st.text_input("Busca por nombre, marca o categoría:")
-    
-    if busqueda:
-        # Filtrado en todas las columnas de texto
-        filtro = df_p.astype(str).apply(lambda x: x.str.contains(busqueda, case=False)).any(axis=1)
-        df_filtrado = df_p[filtro]
-        st.dataframe(df_filtrado, use_container_width=True)
-    else:
-        st.dataframe(df_p, use_container_width=True)
+# 4. Interfaz Principal
+if "productos" in db and not db["productos"].empty:
+    menu = ["📊 Ofertas del Día", "📦 Catálogo", "🏪 Sucursales"]
+    choice = st.sidebar.selectbox("Menú de Navegación", menu)
+
+    if choice == "📊 Ofertas del Día":
+        st.subheader("🚀 Mejores Descuentos Encontrados")
         
-    if df_o.empty:
-        st.info("💡 Para ver las ofertas, asegúrate de crear la pestaña 'Ofertas' en tu Google Sheets.")
+        if "ofertas" in db and not db["ofertas"].empty:
+            try:
+                # Cruce maestro de tablas usando id_producto e id_sucursal
+                resumen = pd.merge(db["ofertas"], db["productos"], on="id_producto")
+                resumen = pd.merge(resumen, db["sucursales"], on="id_sucursal")
+                resumen = pd.merge(resumen, db["supermercados"], on="id_super")
+                
+                # Cálculo de ahorro (si existe precio_base en la tabla de ofertas o precios_sucursal)
+                # Mostramos la información de forma estética
+                for _, fila in resumen.iterrows():
+                    with st.expander(f"📌 {fila['nombre']} - {fila['marca']}"):
+                        col1, col2 = st.columns(2)
+                        col1.metric("Precio Oferta", f"${fila['precio_oferta']}")
+                        col2.write(f"🏢 **Tienda:** {fila['nombre_supermercado']} ({fila['nombre_sucursal']})")
+                        st.caption(f"Válido hasta: {fila['fecha_fin']}")
+            except Exception as e:
+                st.warning("Aún faltan datos o relaciones en las tablas para mostrar el Dashboard completo.")
+        else:
+            st.info("No hay ofertas registradas en la pestaña 'ofertas'.")
+
+    elif choice == "📦 Catálogo":
+        st.subheader("📦 Inventario Completo")
+        st.dataframe(db["productos"], use_container_width=True)
+
+    elif choice == "🏪 Sucursales":
+        st.subheader("📍 Ubicación de Tiendas")
+        if "sucursales" in db:
+            st.table(db["sucursales"])
+
 else:
-    st.error("No se pudieron cargar los datos. Revisa la conexión.")
+    st.error("No se pudo cargar la tabla 'productos'. Verifica que el nombre de la pestaña en el Excel sea exacto.")
