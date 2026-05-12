@@ -19,13 +19,13 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 def cargar_datos():
     tabs = ["Categorias", "Productos", "Supermercados", "Sucursales", "Precios_Sucursal", "Ofertas"]
     data = {}
-    try:
-        for t in tabs:
+    for t in tabs:
+        try:
             data[t] = conn.read(spreadsheet=url_gsheet, worksheet=t)
-        return data
-    except Exception as e:
-        st.error(f"❌ Error al leer las pestañas de Google Sheets: {e}")
-        return None
+        except Exception:
+            st.error(f"❌ Error específico en la pestaña: '{t}'. Revisa que el nombre sea igual en Excel.")
+            return None
+    return data
 
 # Intentar cargar la base de datos
 db = cargar_datos()
