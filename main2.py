@@ -1,29 +1,36 @@
 import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 
-st.title("🛰️ Escáner de Pestañas Real")
+st.set_page_config(page_title="Prueba de Conexión", layout="wide")
 
-url = st.secrets["connections"]["gsheets"]["spreadsheet"]
-conn = st.connection("gsheets", type=GSheetsConnection)
+st.title("🛰️ Verificando Hoja: DB_Productos_Final")
+
+# 1. Intentar obtener la URL de los Secrets
+try:
+    url = st.secrets["connections"]["gsheets"]["spreadsheet"]
+    conn = st.connection("gsheets", type=GSheetsConnection)
+    st.success("✅ URL detectada en Secrets")
+except Exception as e:
+    st.error(f"❌ Error al leer Secrets: {e}")
+    st.stop()
+
+# 2. Intentar leer la pestaña 'Productos'
+st.write("---")
+st.write("### Intentando leer pestaña 'Productos'...")
 
 try:
-    # Este comando es diferente: intenta leer los metadatos del archivo
-    # Para obtener los nombres reales de las hojas
-    from gspread_pandas import Spread
-    # Si no tienes esa librería, usamos este truco de pandas:
-    full_df = conn.read(spreadsheet=url)
+    # Leemos sin usar memoria vieja (ttl=0)
+    df = conn.read(spreadsheet=url, worksheet="Productos", ttl=0)
     
-    st.write("### 📋 Lo que Google le está enviando a la App:")
-    st.info("Si aquí no aparecen tus 6 nombres, el archivo no está guardado como 'Google Sheets'.")
-    
-    # Intento de lectura por nombre forzado
-    tabs = ["Categorias", "Productos", "Supermercados", "Sucursales", "Precios_Sucursal", "Ofertas"]
-    for t in tabs:
-        try:
-            df = conn.read(spreadsheet=url, worksheet=t, ttl=0)
-            st.success(f"✅ ¡Conexión establecida con **{t}**!")
-        except:
-            st.error(f"❌ La pestaña **{t}** no responde. Revisa el formato del archivo.")
+    if not df.empty:
+        st.balloons()
+        st.success("🎉 ¡CONEXIÓN EXITOSA!")
+        st.write("Aquí están los datos que la app ve en tu Excel:")
+        st.dataframe(df, use_container_width=True)
+    else:
+        st.warning("⚠️ El archivo se conectó, pero la pestaña 'Productos' parece estar vacía.")
 
 except Exception as e:
-    st.error(f"Error técnico: {e}")
+    st.error("❌ Falló la lectura de la pestaña.")
+    st.info(f"Detalle técnico: {e}")
+    st.write("Consejo: Revisa que el nombre de la pestaña abajo en Excel sea exactamente 'Productos' (con P mayúscula y terminado en s).")
