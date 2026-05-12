@@ -43,6 +43,7 @@ try:
         ciudad_sel = st.multiselect("Filtrar por Ciudad", ciudades, default=ciudades)
         
         df_filtrado = df_final[df_final['ciudad'].isin(ciudad_sel)]
+
         
         # Diseño de tarjetas o tabla
         for _, fila in df_filtrado.iterrows():
