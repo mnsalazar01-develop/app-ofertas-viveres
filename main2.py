@@ -2,41 +2,42 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 
-st.set_page_config(page_title="Control de Ofertas Viveres", layout="wide")
+st.set_page_config(page_title="Control de Ofertas", layout="wide")
+st.title("🛒 Control de Víveres y Ofertas")
 
-# Conexión establecida
+# 1. Conexión
 url = st.secrets["connections"]["gsheets"]["spreadsheet"]
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-st.title("🛒 Control de Víveres y Ofertas")
-
-# Lista de pestañas corregida
-tabs = ["Categorias", "Productos", "Supermercados", "Sucursales", "Precios_Sucursal", "Ofertas"]
-db = {}
-
-# Cargador chismoso
-st.sidebar.write("### 📂 Estado de Base de Datos")
-for t in tabs:
-    try:
-        df = conn.read(spreadsheet=url, worksheet=t, ttl=0)
-        db[t] = df
-        st.sidebar.success(f"✅ {t}")
-    except:
-        st.sidebar.error(f"❌ {t}")
-
-# Si Productos cargó (que ya vimos que sí), mostramos el buscador
-if "Productos" in db:
-    st.subheader("📦 Buscador de Víveres")
-    # Usamos tus nombres de columna: Id_producto, nombre, marca...
-    df_p = db["Productos"]
-    busqueda = st.text_input("Busca por nombre o marca:")
+# 2. ESCÁNER AUTOMÁTICO (Para no fallar con los nombres)
+try:
+    # Leemos la primera hoja para activar la conexión
+    df_inicial = conn.read(spreadsheet=url, ttl=0)
     
-    if busqueda:
-        # Filtro inteligente
-        resultado = df_p[df_p['nombre'].str.contains(busqueda, case=False, na=False) | 
-                         df_p['marca'].str.contains(busqueda, case=False, na=False)]
-        st.dataframe(resultado, use_container_width=True)
+    st.sidebar.write("### 📂 Pestañas Detectadas")
+    
+    # Intentamos cargar las 6 tablas una por una
+    # IMPORTANTE: Revisa que en el Excel las pestañas se llamen así
+    tabs = ["Categorias", "Productos", "Supermercados", "Sucursales", "Precios_Sucursal", "Ofertas"]
+    db = {}
+
+    for t in tabs:
+        try:
+            # El truco: Limpiamos el nombre de cualquier espacio
+            df = conn.read(spreadsheet=url, worksheet=t.strip(), ttl=0)
+            if not df.empty:
+                db[t] = df
+                st.sidebar.success(f"✅ {t}")
+        except:
+            st.sidebar.error(f"❌ {t}")
+
+    # 3. MOSTRAR DATOS (Si Productos funciona)
+    if "Productos" in db:
+        st.subheader("📦 Catálogo de Productos")
+        st.dataframe(db["Productos"], use_container_width=True)
     else:
-        st.dataframe(df_p, use_container_width=True)
-else:
-    st.warning("Asegúrate de que la pestaña se llame 'Productos' en el Excel.")
+        st.warning("⚠️ La pestaña 'Productos' no se reconoce.")
+        st.info("Asegúrate de que en el Excel la pestaña de abajo se llame exactamente 'Productos'")
+
+except Exception as e:
+    st.error(f"Error de conexión: {e}")
