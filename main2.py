@@ -1,43 +1,33 @@
 import streamlit as st
 from streamlit_gsheets import GSheetsConnection
-import pandas as pd
 
-st.set_page_config(page_title="Control de Ofertas", layout="wide")
-st.title("🛒 Control de Víveres y Ofertas")
+st.title("🔍 Diagnóstico de Nombres de Pestañas")
 
-# 1. Conexión
 url = st.secrets["connections"]["gsheets"]["spreadsheet"]
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 2. ESCÁNER AUTOMÁTICO (Para no fallar con los nombres)
 try:
-    # Leemos la primera hoja para activar la conexión
-    df_inicial = conn.read(spreadsheet=url, ttl=0)
+    # 1. Intentamos leer la primera pestaña disponible SIN nombre
+    df_primera = conn.read(spreadsheet=url, ttl=0)
+    st.success("✅ Conexión establecida con el archivo.")
     
-    st.sidebar.write("### 📂 Pestañas Detectadas")
+    # 2. TRUCO MAESTRO: Vamos a imprimir los nombres de las columnas que ve
+    # Si la pestaña se llama 'Productos', aquí deberían salir tus columnas
+    st.write("### Columnas detectadas en la primera pestaña:")
+    st.write(df_primera.columns.tolist())
+
+    # 3. PRUEBA DE FUEGO: Vamos a intentar cargar 'Productos' forzando el formato
+    st.write("---")
+    st.write("### Intento de acceso directo:")
     
-    # Intentamos cargar las 6 tablas una por una
-    # IMPORTANTE: Revisa que en el Excel las pestañas se llamen así
-    tabs = ["Categorias", "Productos", "Supermercados", "Sucursales", "Precios_Sucursal", "Ofertas"]
-    db = {}
-
-    for t in tabs:
-        try:
-            # El truco: Limpiamos el nombre de cualquier espacio
-            df = conn.read(spreadsheet=url, worksheet=t.strip(), ttl=0)
-            if not df.empty:
-                db[t] = df
-                st.sidebar.success(f"✅ {t}")
-        except:
-            st.sidebar.error(f"❌ {t}")
-
-    # 3. MOSTRAR DATOS (Si Productos funciona)
-    if "Productos" in db:
-        st.subheader("📦 Catálogo de Productos")
-        st.dataframe(db["Productos"], use_container_width=True)
-    else:
-        st.warning("⚠️ La pestaña 'Productos' no se reconoce.")
-        st.info("Asegúrate de que en el Excel la pestaña de abajo se llame exactamente 'Productos'")
-
+    try:
+        # Probamos con el nombre tal cual
+        test_df = conn.read(spreadsheet=url, worksheet="Productos", ttl=0)
+        st.success("🎉 ¡LOGRADO! La pestaña 'Productos' fue reconocida.")
+        st.dataframe(test_df.head())
+    except Exception as e:
+        st.error("❌ Falló el acceso por nombre 'Productos'.")
+        st.info("Esto sucede si el nombre en el Excel tiene un espacio invisible o es diferente.")
+        
 except Exception as e:
-    st.error(f"Error de conexión: {e}")
+    st.error(f"Error crítico: {e}")
