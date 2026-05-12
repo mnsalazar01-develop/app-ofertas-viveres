@@ -2,7 +2,7 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 
-st.set_page_config(page_title="App Ofertas Víveres", layout="wide")
+st.set_page_config(page_title="Diagnóstico de Tablas", layout="wide")
 
 # Conexión Segura
 try:
@@ -13,31 +13,33 @@ except:
 
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# Carga de datos con detección de errores por pestaña
-@st.cache_data(ttl=60) 
-def cargar_datos():
-    tabs = ["Categorias", "Productos", "Supermercados", "Sucursales", "Precios_Sucursal", "Ofertas"]
-    data = {}
-    for t in tabs:
-        try:
-            data[t] = conn.read(spreadsheet=url_gsheet, worksheet=t)
-        except Exception:
-            # Si una falla, nos avisa cuál es
-            st.error(f"❌ Error al leer la pestaña: '{t}'. Revisa el nombre en tu Excel.")
-            return None
-    return data
+st.title("🔍 Diagnóstico Ultra-Chismoso de Base de Datos")
 
-db = cargar_datos()
+# Intentamos leer todas las tablas sin detenernos si una falla
+tabs = ["Categorias", "Productos", "Supermercados", "Sucursales", "Precios_Sucursal", "Ofertas"]
+db = {}
+reporte = []
 
-st.title("🛒 Control de Ofertas de Víveres")
+st.write("### Reporte de Conexión:")
 
-if db is not None:
-    st.success("✅ ¡Todas las tablas cargadas con éxito!")
-    
-    # Menú para revisar las tablas
-    menu = ["Dashboard", "Explorador de Datos"]
-    choice = st.sidebar.selectbox("Menú", menu)
-    
-    if choice == "Explorador de Datos":
-        tabla_sel = st.selectbox("Ver tabla:", list(db.keys()))
-        st.dataframe(db[tabla_sel])
+for t in tabs:
+    try:
+        # Intentamos leer la pestaña
+        df = conn.read(spreadsheet=url_gsheet, worksheet=t)
+        db[t] = df
+        st.success(f"✅ Pestaña **'{t}'**: Leída correctamente ({len(df)} filas encontradas).")
+    except Exception as e:
+        # Si falla, nos cuenta el chisme completo del porqué
+        st.error(f"❌ Pestaña **'{t}'**: FALLÓ. Revisa que se llame exactamente así en el Excel.")
+        with st.expander(f"Ver detalle técnico del error en '{t}'"):
+            st.code(e)
+
+st.divider()
+
+# Solo mostramos el menú si al menos hay datos
+if len(db) > 0:
+    st.info(f"Se cargaron {len(db)} de {len(tabs)} tablas.")
+    tabla_sel = st.selectbox("Revisar contenido de tabla exitosa:", list(db.keys()))
+    st.dataframe(db[tabla_sel])
+else:
+    st.warning("No se pudo cargar ninguna tabla. Revisa que el archivo de Google Sheets tenga los permisos de 'Lector' para 'Cualquier persona con el enlace'.")
