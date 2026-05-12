@@ -17,7 +17,7 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 # 3. Función de carga protegida
 @st.cache_data(ttl=600)
 def cargar_datos():
-    tabs = ["Categorias", "Productos", "Supermercados", "Sucursales", "Precios_Sucursal", "Ofertas"]
+    tabs = ["Productos", "Categorias", "Supermercados", "Sucursales", "Precios_Sucursal", "Ofertas"]
     data = {}
     for t in tabs:
         try:
