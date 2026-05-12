@@ -18,16 +18,49 @@ menu = ["📊 Dashboard de Ofertas", "📦 Catálogo de Productos", "🏪 Sucurs
 choice = st.sidebar.selectbox("Navegación", menu)
 
 # --- CARGA DE DATOS (Las 6 Tablas) ---
-@st.cache_data(ttl=600) # Se actualiza cada 10 min
+#@st.cache_data(ttl=600) # Se actualiza cada 10 min
+#def cargar_todas_las_tablas():
+#    tabs = ["Categorias", "Productos", "Supermercados", "Sucursales", "Precios_Sucursal", "Ofertas"]
+#    data = {}
+#    for t in tabs:
+#        data[t] = conn.read(spreadsheet=url_gsheet, worksheet=t)
+#   return data
+#
+#try:
+#    db = cargar_todas_las_tablas()
+
+# --- CARGA DE DATOS ---
+@st.cache_data(ttl=600)
 def cargar_todas_las_tablas():
+    # Asegúrate de que estos nombres sean EXACTOS a tus pestañas de Excel
     tabs = ["Categorias", "Productos", "Supermercados", "Sucursales", "Precios_Sucursal", "Ofertas"]
     data = {}
-    for t in tabs:
-        data[t] = conn.read(spreadsheet=url_gsheet, worksheet=t)
-    return data
+    try:
+        for t in tabs:
+            # Intentamos leer cada pestaña
+            data[t] = conn.read(spreadsheet=url_gsheet, worksheet=t)
+        return data
+    except Exception as e:
+        st.error(f"Error al leer las pestañas: {e}")
+        return None
 
-try:
-    db = cargar_todas_las_tablas()
+# Intentamos inicializar la variable db
+db = cargar_todas_las_tablas()
+
+# --- VERIFICACIÓN DE SEGURIDAD ---
+if db is not None:
+    # Solo si db existe, ejecutamos el resto del código
+    if choice == "📊 Dashboard de Ofertas":
+        # ... tu código del dashboard ...
+        pass
+
+    # El bloque de depuración ahora funcionará porque está dentro del 'if db'
+    with st.expander("🛠️ Modo Depuración"):
+        tabla_debug = st.selectbox("Elegir tabla:", list(db.keys()))
+        st.dataframe(db[tabla_debug])
+else:
+    st.error("🚨 La base de datos no pudo cargarse. Revisa la URL en Secrets y los nombres de las pestañas.")
+
 
     if choice == "📊 Dashboard de Ofertas":
         st.subheader("🚀 Ofertas Activas en Tiempo Real")
